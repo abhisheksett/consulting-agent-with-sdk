@@ -1,0 +1,78 @@
+{
+    "name": "Consulting Intelligence Agent",
+    "description": "Generates structured consulting meeting prep briefs for enterprise clients. Researches industry trends, competitive landscape, and technology developments. Returns a formatted brief with talking points, risk factors, and recommended questions.",
+    "url": "https://consulting-agent.your-domain.com/a2a",
+    "version": "1.0.0",
+    "provider": {
+        "organization": "Abhishek Sett",
+        "url": "https://your-domain.com"
+    },
+    "capabilities": {
+        "streaming": true,
+        "pushNotifications": false,
+        "stateTransitionHistory": true
+    },
+    "authentication": {
+        "schemes": [
+            "bearer"
+        ]
+    },
+    "skills": [
+        {
+            "id": "meeting_prep",
+            "name": "Meeting Prep Brief",
+            "description": "Generates a comprehensive consulting meeting prep brief for a given topic and optional client name. Includes industry context, competitive landscape, technology trends, talking points, and recommended questions. Takes 60-90 seconds for thorough research.",
+            "tags": [
+                "consulting",
+                "research",
+                "meeting-prep",
+                "enterprise"
+            ],
+            "inputModes": [
+                "text"
+            ],
+            "outputModes": [
+                "text"
+            ],
+            "examples": [
+                {
+                    "input": "Prepare a brief on AI adoption in healthcare for our meeting with UnitedHealth Group",
+                    "output": "A structured brief covering AI trends in healthcare, UnitedHealth's current AI initiatives, competitive landscape, talking points, and 5 recommended questions for the meeting."
+                }
+            ]
+        },
+        {
+            "id": "competitive_analysis",
+            "name": "Competitive Analysis",
+            "description": "Analyzes the competitive landscape for a given market or technology area. Returns key players, positioning, strengths/weaknesses, and strategic implications.",
+            "tags": [
+                "consulting",
+                "research",
+                "competitive-intelligence"
+            ],
+            "inputModes": [
+                "text"
+            ],
+            "outputModes": [
+                "text"
+            ]
+        },
+        {
+            "id": "technology_evaluation",
+            "name": "Technology Evaluation",
+            "description": "Evaluates a technology for enterprise adoption. Covers maturity, use cases, vendors, risks, and implementation considerations.",
+            "tags": [
+                "consulting",
+                "technology",
+                "evaluation",
+                "enterprise"
+            ],
+            "inputModes": [
+                "text"
+            ],
+            "outputModes": [
+                "text"
+            ]
+        }
+    ]
+}
