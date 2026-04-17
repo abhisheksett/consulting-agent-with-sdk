@@ -1,38 +1,60 @@
-# Consulting Intelligence Agent (Agent SDK)
+# Consulting Intelligence Agent (SDK)
 
-A multi-agent system that generates polished consulting deliverables using the Claude Agent SDK. The pipeline implements five agentic design patterns — **Router**, **Parallelization**, **Orchestrator-Worker**, **Evaluator-Optimizer**, and **Human-in-the-Loop** — with your code driving every phase rather than relying on the model to self-direct.
+An autonomous multi-agent system that generates structured consulting meeting prep briefs — researching, writing, evaluating, and revising without human intervention.
 
-## Agentic patterns
+Built to explore the full production agent stack: the Claude Agent SDK as the core runtime, with LangGraph and CrewAI implementations of the same workflow for direct comparison. Every major concept in modern agent engineering is implemented here — not as a demo, but as working code.
 
-| #   | Pattern                 | Where it lives                                                                                                                    |
-| --- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | **Router**              | `classify_request()` — a zero-tool agent classifies the user's request into a workflow type; your code branches deterministically |
-| 2   | **Parallelization**     | `parallel_research()` — three specialized researchers (industry, company, technology) run simultaneously via `asyncio.gather`     |
-| 3   | **Orchestrator-Worker** | `workflow_meeting_prep()` — your code coordinates research → synthesis → evaluation → revision phases sequentially                |
-| 4   | **Evaluator-Optimizer** | Eval/revision loop — an evaluator subagent scores the brief against a rubric; if it fails, the analyst revises (up to 2 rounds)   |
-| 5   | **Human-in-the-Loop**   | `human_approval_gate()` — the workflow pauses for human approval before finalizing the brief                                      |
+---
 
-## How it works
+## What It Does
+
+Given a topic and optional client name, the agent:
+
+1. **Routes** the request to the right workflow (meeting prep / competitive analysis / tech evaluation)
+2. **Researches** in parallel — three specialist researchers run simultaneously via `asyncio.gather`
+3. **Writes** a structured consulting brief using a custom Skill
+4. **Evaluates** the brief on a 30-point rubric
+5. **Revises** automatically if score < 20 (up to 2 cycles)
+6. **Waits for human approval** before saving the final output
+7. **Remembers** what worked and what didn't — memory persists across runs
+
+---
+
+## Three Implementations — Same Workflow
+
+One of the goals of this project is to compare orchestration approaches on identical logic:
+
+| File | Runtime | Routing | State Management |
+|---|---|---|---|
+| `src/agent.py` | Claude Agent SDK | Python code — explicit | Python variables |
+| `src/langgraph_agent.py` | LangGraph | Graph edges + routing functions | Typed `StateGraph` dict |
+| `src/crewai_agent.py` | CrewAI | Sequential process | Implicit via task `context` |
+
+The eval loop (researcher → analyst → evaluator → revise if score < 20) is the same pattern in all three. In the SDK you write the `if/else` yourself. In LangGraph it's `add_conditional_edges`. In CrewAI it requires hierarchical process. Same problem, very different implementation complexity.
+
+---
+
+## Architecture (SDK version)
 
 ```
 User request
-     │
-     ▼
+      │
+      ▼
 ┌──────────┐
-│  ROUTER  │  ← classifies into meeting_prep / competitive_analysis / technology_evaluation
+│  ROUTER  │  ← classifies: meeting_prep / competitive_analysis / tech_evaluation
 └────┬─────┘
      │
      ▼
-┌─────────────────────────────────────┐
-│     PARALLEL RESEARCH               │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐  │
-│  │ Industry │ │ Company  │ │   Tech   │  │  ← 3 researchers run simultaneously
-│  └──────────┘ └──────────┘ └──────────┘  │
-└────┬────────────────────────────────┘
+┌─────────────────────────────────────────┐
+│         PARALLEL RESEARCH               │
+│  ┌──────────┐ ┌──────────┐ ┌─────────┐ │
+│  │ Industry │ │ Company  │ │  Tech   │ │  ← 3 researchers run simultaneously
+│  └──────────┘ └──────────┘ └─────────┘ │
+└────┬────────────────────────────────────┘
      │
      ▼
 ┌──────────┐
-│ ANALYST  │  ← synthesizes research into a client-ready brief
+│ ANALYST  │  ← synthesizes research into structured brief (uses consulting-brief Skill)
 └────┬─────┘
      │
      ▼
@@ -46,113 +68,151 @@ User request
 └──────┬───────────┘
        │
        ▼
-   output/brief-<topic>.md
+  output/brief-<topic>.md
 ```
 
-### Subagents
+---
 
-| Agent                   | Role                                         | Tools                                           |
-| ----------------------- | -------------------------------------------- | ----------------------------------------------- |
-| **Router**              | Classifies requests into workflow types      | None (classification only)                      |
-| **Industry Researcher** | Macro trends, market size, sector dynamics   | `search_industry` MCP, `WebSearch`, `WebFetch`  |
-| **Company Researcher**  | Company news, strategy, financials           | `research_company` MCP, `WebSearch`, `WebFetch` |
-| **Tech Researcher**     | Enterprise technology and AI adoption trends | `get_tech_trends` MCP, `WebSearch`, `WebFetch`  |
-| **Analyst**             | Synthesizes research into a structured brief | `Read`, `Write`, `Bash`                         |
-| **Evaluator**           | Scores briefs against a six-criterion rubric | `Read`, `Bash`                                  |
+## Agentic Patterns Implemented
 
-### Evaluation rubric (30-point scale)
+| Pattern | Where |
+|---|---|
+| Router | `classify_request()` — classifies request, code branches deterministically |
+| Parallelization | `parallel_research()` — 3 researchers via `asyncio.gather` |
+| Orchestrator-Worker | `workflow_meeting_prep()` — Python coordinates all phases sequentially |
+| Evaluator-Optimizer | Eval/revision loop — evaluator scores, analyst revises if needed |
+| Human-in-the-Loop | `human_approval_gate()` — workflow pauses before finalising |
 
-Each criterion is scored 1–5: executive summary, research depth, talking points, risk awareness, strategic questions, overall readiness. A score ≥ 20 passes.
+---
 
-### Memory system
+## Subagents
 
-The project includes a file-based memory system (`src/memory.py`) with three memory types:
+| Agent | Role | Tools |
+|---|---|---|
+| Router | Classifies requests | None |
+| Industry Researcher | Macro trends, market dynamics | `search_industry` MCP, WebSearch, WebFetch |
+| Company Researcher | Company news, strategy, financials | `research_company` MCP, WebSearch, WebFetch |
+| Tech Researcher | Technology and AI adoption trends | `get_tech_trends` MCP, WebSearch, WebFetch |
+| Analyst | Synthesizes research into structured brief | Read, Write, Bash |
+| Evaluator | Scores brief against 6-criterion rubric | Read, Bash |
 
-- **Episodic** — records each run (topic, score, feedback, what worked/failed) as JSONL. Relevant episodes are injected into analyst prompts so the agent learns from past mistakes.
-- **Semantic** — accumulated facts and preferences (e.g. "talking points often score low on first draft") stored as JSON. Categories: `preference`, `domain_knowledge`, `tool_insight`, `quality_pattern`.
-- **Session** — session IDs for Agent SDK resume capability, enabling long-running workflows to pick up mid-way.
+**Evaluation rubric (30 points):** executive summary, research depth, talking points, risk awareness, strategic questions, overall readiness — scored 1-5 each. Score ≥ 20 passes.
 
-### A2A (Agent-to-Agent) protocol
+---
 
-The project implements Google's A2A protocol for inter-agent communication:
-
-- **`src/a2a_server.py`** — exposes the consulting agent as an A2A-compliant HTTP service with JSON-RPC 2.0. Any A2A client (regardless of framework) can discover, call, and poll your agent.
-- **`src/a2a_client.py`** — client for calling remote A2A agents. Includes `A2AClient` for discovery, task submission, and polling, plus a `multi_agent_consulting_brief()` function that orchestrates multiple specialist agents in parallel over the network.
-- **`.well-known/agent.json`** — the Agent Card describing capabilities, skills, and authentication.
-
-## Project structure
+## Project Structure
 
 ```
-src/
-  agent.py        # Orchestration: router, parallel research, eval loop, human gate
-  models.py       # Pydantic models (EvalResult, RouteClassification, Episode, SemanticFact)
-  tools.py        # Tavily MCP tools (search_industry, research_company, get_tech_trends)
-  memory.py       # Episodic, semantic, and session memory system
-  a2a_server.py   # A2A server — exposes agent over HTTP/JSON-RPC
-  a2a_client.py   # A2A client — discover and call remote agents
-skills/
-  consulting-brief-generator/SKILL.md   # Brief format the analyst follows
-  eval-consulting-brief/SKILL.md        # Rubric the evaluator uses
-.well-known/
-  agent.json      # A2A Agent Card
-output/            # Generated briefs are saved here
+consulting-agent-with-sdk/
+├── .well-known/
+│   └── agent.json           ← A2A Agent Card (skills, capabilities, endpoint)
+├── skills/
+│   ├── consulting-brief-generator/SKILL.md  ← brief format the analyst follows
+│   └── eval-consulting-brief/SKILL.md       ← rubric the evaluator uses
+├── src/
+│   ├── agent.py             ← main orchestrator (Claude Agent SDK)
+│   ├── models.py            ← Pydantic models (EvalResult, RouteClassification, Episode)
+│   ├── tools.py             ← custom MCP tools (FastMCP + Tavily)
+│   ├── memory.py            ← episodic + semantic + session memory
+│   ├── a2a_server.py        ← exposes agent as A2A-compliant HTTP service
+│   ├── a2a_client.py        ← discovers and calls remote A2A agents
+│   ├── langgraph_agent.py   ← same workflow as LangGraph StateGraph (OpenAI)
+│   └── crewai_agent.py      ← same workflow as CrewAI crew (OpenAI)
+├── output/                  ← generated briefs saved here
+├── memory/                  ← persisted agent memory (auto-created)
+│   ├── episodes.jsonl
+│   ├── semantic.json
+│   └── sessions.json
+├── .env.example
+└── pyproject.toml
 ```
 
-## Setup
+---
 
-**Prerequisites:** Python 3.12+, [`uv`](https://docs.astral.sh/uv/)
+## Agent Memory
 
-1. Clone the repo and install dependencies:
+`memory.py` implements three memory types that persist to disk across runs:
 
-   ```bash
-   uv sync
-   ```
+**Episodic** — records each run (topic, score, what worked, what failed) as JSONL. Relevant past episodes are retrieved by similarity and injected into analyst prompts — the agent learns from past mistakes.
 
-2. Create a `.env` file in the project root:
-   ```
-   ANTHROPIC_API_KEY=sk-ant-...
-   TAVILY_API_KEY=tvly-...
-   ```
+**Semantic** — accumulated facts and preferences extracted from evaluator feedback ("talking points often score low on first draft", "Tavily returns better results with the year in the query"). Stored as JSON, categories: `preference`, `domain_knowledge`, `tool_insight`, `quality_pattern`.
 
-## Usage
+**Session** — saves Agent SDK session IDs for resume capability. Long-running workflows can restart from the exact point they left off.
 
-### Run the agent directly
+---
+
+## A2A Protocol
+
+The agent is fully A2A-compliant — callable by any A2A-compatible agent regardless of framework.
 
 ```bash
-uv run python -m src.agent "AI agents in healthcare" "UnitedHealth Group"
-```
-
-Arguments:
-
-- `topic` (required) — industry or technology focus
-- `client_name` (optional) — specific company to research
-
-The router auto-classifies the request into `meeting_prep`, `competitive_analysis`, or `technology_evaluation`. If confidence is low, you're prompted to confirm.
-
-The brief is saved to `output/brief-<topic>.md`.
-
-### Run as an A2A server
-
-```bash
+# Start the A2A server
 uv run python src/a2a_server.py
-# Server starts at http://localhost:8000
 # Agent Card: http://localhost:8000/.well-known/agent.json
 # A2A endpoint: http://localhost:8000/a2a
-```
 
-### Call the agent via A2A client
-
-```bash
-# (with the A2A server running in another terminal)
+# Call it from another terminal
 uv run python src/a2a_client.py
 ```
 
-## Dependencies
+Skills exposed: `meeting_prep`, `competitive_analysis`, `technology_evaluation`
 
-| Package            | Purpose                                     |
-| ------------------ | ------------------------------------------- |
-| `claude-agent-sdk` | Agent orchestration and subagent delegation |
-| `mcp`              | In-process MCP server for custom tools      |
-| `tavily-python`    | Web search and company research             |
-| `pydantic`         | Structured validation of agent JSON outputs |
-| `python-dotenv`    | API key loading from `.env`                 |
+The `multi_agent_consulting_brief()` function in `a2a_client.py` demonstrates parallel orchestration of multiple A2A agents — the same parallelization pattern but now distributed across the network.
+
+---
+
+## Setup
+
+**Prerequisites:** Python 3.12+, [uv](https://docs.astral.sh/uv/)
+
+```bash
+git clone https://github.com/abhisheksett/consulting-agent-with-sdk
+cd consulting-agent-with-sdk
+uv sync
+
+cp .env.example .env
+# Add to .env:
+# TAVILY_API_KEY=...       (required for all versions)
+# OPENAI_API_KEY=...       (required for LangGraph + CrewAI versions)
+```
+
+**Note:** The Claude Agent SDK version (`agent.py`) runs via Claude Code — no Anthropic API key needed. The LangGraph and CrewAI versions use OpenAI.
+
+---
+
+## Usage
+
+```bash
+# Claude Agent SDK version (requires Claude Code)
+uv run python -m src.agent "AI agents in healthcare" "UnitedHealth Group"
+
+# LangGraph version (requires OPENAI_API_KEY)
+uv run python src/langgraph_agent.py
+
+# CrewAI version (requires OPENAI_API_KEY)
+uv run python src/crewai_agent.py
+
+# A2A server
+uv run python src/a2a_server.py
+```
+
+The brief is saved to `output/brief-<topic>.md`.
+
+---
+
+## Key Concepts Demonstrated
+
+- **Claude Agent SDK** — `query()` loop, `AgentDefinition`, subagent delegation, session management
+- **Custom MCP tools** — FastMCP `@tool` decorator, in-process server
+- **Agent Skills** — `SKILL.md` format, progressive disclosure, portable domain knowledge
+- **Agent Memory** — episodic, semantic, session — persisted across runs
+- **A2A Protocol** — Agent Card, Task lifecycle, JSON-RPC 2.0, push notifications, parallel multi-agent orchestration
+- **LangGraph** — `StateGraph`, typed state, conditional edges, eval loop as graph construct
+- **CrewAI** — role-based agents, task context passing, sequential crew execution
+
+---
+
+## Related Projects
+
+- [rag-explorer](https://github.com/abhisheksett/rag-explorer) — Naive vs Hybrid vs Agentic RAG on cloud architecture docs
+- [consulting-agent](https://github.com/abhisheksett/consulting-agent) — Claude Code version of the same agent (skills + subagents, no SDK)
